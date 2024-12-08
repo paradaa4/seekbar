@@ -5,36 +5,104 @@
 #include <numeric>
 #include <ranges>
 
-using UiElement = sf::Shape;
-// class UiElement : public sf::Shape {};
+enum class Orientation { Horizontal, Vertical };
 
-class Spacer : public sf::RectangleShape
+class UiElement : public sf::Transformable, public sf::Drawable
 {
 public:
-    explicit Spacer(const sf::Vector2f &size = {}) { setFillColor(sf::Color::Cyan); }
+    virtual ~UiElement() = default;
+
+    sf::Vector2f size() const { return m_size; }
+    void setSize(sf::Vector2f size) { m_size = size; }
+    float dimension(Orientation orientation) const
+    {
+        return orientation == Orientation::Horizontal ? size().x : size().y;
+    }
+    float secondaryDimension(Orientation orientation) const
+    {
+        return dimension(orientation == Orientation::Horizontal ? Orientation::Vertical : Orientation::Horizontal);
+    }
+
+    void setFillWidth(bool fillWidth) { m_fillWidth = fillWidth; };
+    bool fillWidth() const { return m_fillWidth; }
+    void setFillHeight(bool fillHeight) { m_fillHeight = fillHeight; };
+    bool fillHeight() const { return m_fillHeight; }
+
+    const std::unique_ptr<sf::Shape> &shape() const { return m_shape; }
+    void setShape(std::unique_ptr<sf::Shape> &&shape)
+    {
+        m_shape = std::move(shape);
+        if (m_shape) {
+            m_size = m_shape->getGlobalBounds().getSize();
+        }
+    }
+
+    void draw(sf::RenderTarget &target, sf::RenderStates states) const override
+    {
+        if (m_shape) {
+            m_shape->setPosition(getPosition());
+            target.draw(*m_shape.get());
+        }
+    }
+
+    void show() { updateGeometry(); }
+
+private:
+    virtual void updateGeometry(){};
+
+    sf::Vector2f m_size{};
+    bool m_fillWidth{};
+    bool m_fillHeight{};
+    std::unique_ptr<sf::Shape> m_shape;
 };
 
-class PlayButton : public sf::ConvexShape
+// class Spacer : public UiElement
+// {
+// private:
+//     void updateGeometry() {
+
+//     }
+// };
+
+class VSpacer : public UiElement
 {
 public:
-    explicit PlayButton(std::size_t pointCount = 0)
+    explicit VSpacer() { setFillHeight(true); }
+};
+
+class HSpacer : public UiElement
+{
+public:
+    explicit HSpacer() { setFillWidth(true); }
+};
+class PlayButton : public UiElement
+{
+public:
+    explicit PlayButton()
     {
-        setPointCount(3);
-        setPoint(0, {0, 0});
-        setPoint(1, {0, 20});
-        setPoint(2, {16, 10});
+        auto shape = std::make_unique<sf::ConvexShape>();
+        shape->setPointCount(3);
+        shape->setPoint(0, {0, 0});
+        shape->setPoint(1, {0, 20});
+        shape->setPoint(2, {16, 10});
+        setShape(std::move(shape));
     }
 };
 
-class Layout : public sf::RectangleShape
+class SeekBar : public sf::RectangleShape
 {
 public:
-    enum class Orientation { Horizontal, Vertical };
+    explicit SeekBar(const sf::Vector2f &size = {}) {}
+};
 
-    explicit Layout(sf::Vector2f size, Orientation orientation)
+class Layout : public UiElement
+{
+public:
+    explicit Layout(Orientation orientation)
         : m_orientation{orientation}
     {
-        setSize(size);
+        setFillWidth(orientation == Orientation::Vertical);
+        setFillWidth(orientation == Orientation::Horizontal);
     }
 
     Orientation orientation() const { return m_orientation; }
@@ -49,10 +117,10 @@ public:
     void addEntry(std::unique_ptr<UiElement> &&entry)
     {
         if (const auto layout = dynamic_cast<Layout *>(entry.get())) {
-            if (layout->orientation() == Layout::Orientation::Horizontal) {
-                layout->setSize({getSize().x - 2 * m_padding, layout->getSize().y});
+            if (layout->orientation() == Orientation::Horizontal) {
+                layout->setSize({size().x - 2 * m_padding, layout->size().y});
             } else {
-                layout->setSize({layout->getSize().x, getSize().y - 2 * m_padding});
+                layout->setSize({layout->size().x, size().y - 2 * m_padding});
             }
         }
         m_entries.push_back(std::move(entry));
@@ -60,9 +128,9 @@ public:
 
     void draw(sf::RenderTarget &target, sf::RenderStates states) const override
     {
-        // sf::RectangleShape background{getSize()};
+        // sf::RectangleShape background{size()};
         // background.setPosition(getPosition());
-        // background.setFillColor(getFillColor() - sf::Color{0, 0, 0, 150});
+        // background.setFillColor(sf::Color::Red - sf::Color{0, 0, 0, 150});
         // target.draw(background);
         for (const auto &entry : m_entries) {
             target.draw(*entry);
@@ -73,46 +141,42 @@ public:
     {
         updateMinimumSize();
         recalculateSizes();
+        for (const auto &entry : m_entries) {
+            entry->show();
+        }
     }
 
 private:
-    float entrySize(const std::unique_ptr<UiElement> &element)
-    {
-        return m_orientation == Orientation::Horizontal ? element->getGlobalBounds().width
-                                                        : element->getGlobalBounds().height;
-    }
-
     void updateMinimumSize()
     {
         const auto minimumSize = 2 * m_padding
                                  + std::ranges::max(m_entries | std::views::transform([this](auto &entry) {
-                                                        return m_orientation == Orientation::Horizontal
-                                                                   ? entry->getGlobalBounds().height
-                                                                   : entry->getGlobalBounds().width;
+                                                        return entry->secondaryDimension(m_orientation);
                                                     }));
 
-        std::cout << minimumSize << std::endl;
         if (m_orientation == Orientation::Horizontal) {
-            setSize({getSize().x, minimumSize});
+            setSize({size().x, minimumSize});
         } else {
-            setSize({minimumSize, getSize().y});
+            setSize({minimumSize, size().y});
         }
     }
 
     void recalculateSizes()
     {
-        const auto remainingSize = (m_orientation == Orientation::Horizontal ? getSize().x : getSize().y)
-                                   - 2 * m_padding
+        const auto remainingSize = dimension(m_orientation) - 2 * m_padding
                                    - std::accumulate(
                                        std::cbegin(m_entries),
                                        std::cend(m_entries),
                                        0.0f,
-                                       [this](auto sum, const auto &entry) { return sum + entrySize(entry); })
+                                       [this](auto sum, const auto &entry) {
+                                           return sum + entry->dimension(m_orientation);
+                                       })
                                    - (m_entries.size() - 1) * m_spacing;
 
-        auto spacers = m_entries
-                       | std::views::transform([](auto &entry) { return dynamic_cast<Spacer *>(entry.get()); })
-                       | std::views::filter([](auto spacer) { return spacer != nullptr; });
+        auto spacers = m_entries | std::views::filter([this](auto &entry) {
+                           return entry->fillWidth() && m_orientation == Orientation::Horizontal
+                                  || entry->fillHeight() && m_orientation == Orientation::Vertical;
+                       });
 
         const auto sizePerSpacer = remainingSize / std::ranges::distance(spacers);
         for (const auto &entry : spacers) {
@@ -124,8 +188,9 @@ private:
         }
         auto originPosition = this->getPosition() + sf::Vector2f{m_padding, m_padding};
         for (const auto &entry : m_entries) {
+            std::cout << std::format("{}, {}\n", originPosition.x, originPosition.y);
             entry->setPosition(originPosition);
-            const auto newPosition = m_spacing + entrySize(entry);
+            const auto newPosition = m_spacing + entry->dimension(m_orientation);
             if (m_orientation == Orientation::Horizontal) {
                 originPosition.x += newPosition;
             } else {
@@ -152,23 +217,22 @@ int main()
     auto window = sf::RenderWindow({800u, 600u}, "yt seeker");
     window.setFramerateLimit(144);
 
-    Layout layout{sf::Vector2f{window.getSize()}, Layout::Orientation::Vertical};
-    layout.setFillColor(sf::Color::Yellow);
+    Layout layout{Orientation::Vertical};
+    layout.setSize(sf::Vector2f{window.getSize()});
     layout.setSpacing(8);
-    layout.setPadding(10);
-    layout.addEntry(std::make_unique<Spacer>());
+    layout.setPadding(20);
+    layout.addEntry(std::make_unique<VSpacer>());
     layout.addEntry(std::make_unique<PlayButton>());
 
-    auto layout1 = std::make_unique<Layout>(sf::Vector2f{0, 20}, Layout::Orientation::Horizontal);
+    auto layout1 = std::make_unique<Layout>(Orientation::Horizontal);
     layout1->setSpacing(20);
-    layout1->setFillColor(sf::Color::Red);
-    layout1->addEntry(std::make_unique<Spacer>());
+    layout1->addEntry(std::make_unique<HSpacer>());
     layout1->addEntry(std::make_unique<PlayButton>());
     layout1->addEntry(std::make_unique<PlayButton>());
-    layout1->addEntry(std::make_unique<Spacer>());
+    layout1->addEntry(std::make_unique<HSpacer>());
 
     layout.addEntry(std::move(layout1));
-    layout.addEntry(std::make_unique<Spacer>());
+    layout.addEntry(std::make_unique<VSpacer>());
     layout.show();
 
     while (window.isOpen()) {
