@@ -1,9 +1,17 @@
 #include <SFML/Graphics.hpp>
+#include <chrono>
 #include <format>
+#include <functional>
 #include <iostream>
 #include <list>
 #include <numeric>
+#include <random>
 #include <ranges>
+
+auto format(auto v)
+{
+    return std::format("({}, {})\n", v.x, v.y);
+}
 
 enum class Orientation { Horizontal, Vertical };
 
@@ -39,13 +47,18 @@ public:
 
     void draw(sf::RenderTarget &target, sf::RenderStates states) const override
     {
+        // sf::RectangleShape background{size()};
+        // background.setPosition(getPosition());
+        // background.setFillColor(m_debugBackgroundColor);
+        // target.draw(background);
+        states.transform *= getTransform();
         if (m_shape) {
-            m_shape->setPosition(getPosition());
-            target.draw(*m_shape.get());
+            target.draw(*m_shape.get(), states);
         }
     }
 
-    void show() { updateGeometry(); }
+    virtual void show() { updateGeometry(); }
+    virtual void onClicked(sf::Vector2i mousePosition) {}
 
 private:
     virtual void updateGeometry(){};
@@ -54,15 +67,14 @@ private:
     bool m_fillWidth{};
     bool m_fillHeight{};
     std::unique_ptr<sf::Shape> m_shape;
+
+    sf::Color m_debugBackgroundColor = []() {
+        static std::random_device rd;
+        static std::mt19937 mt{rd()};
+        static std::uniform_int_distribution<sf::Uint8> dist{0, 255};
+        return sf::Color{dist(mt), dist(mt), dist(mt), 90};
+    }();
 };
-
-// class Spacer : public UiElement
-// {
-// private:
-//     void updateGeometry() {
-
-//     }
-// };
 
 class VSpacer : public UiElement
 {
@@ -78,21 +90,172 @@ public:
 class PlayButton : public UiElement
 {
 public:
-    explicit PlayButton()
+    using Callback = std::function<void(bool)>;
+    explicit PlayButton(Callback &&callback)
+        : m_callback{std::move(callback)}
     {
-        auto shape = std::make_unique<sf::ConvexShape>();
-        shape->setPointCount(3);
-        shape->setPoint(0, {0, 0});
-        shape->setPoint(1, {0, 20});
-        shape->setPoint(2, {16, 10});
-        setShape(std::move(shape));
+        static constexpr auto padding = 2.f;
+
+        setSize({20, 20});
+        m_playShape = std::make_unique<sf::ConvexShape>();
+        m_playShape->setPointCount(3);
+        m_playShape->setPoint(0, {padding, padding});
+        m_playShape->setPoint(1, {padding, size().y - padding});
+        m_playShape->setPoint(2, {size().x - padding * 2, size().y / 2});
+        auto createPauseShape = [this](int offset = 0) {
+            auto shape = std::make_unique<sf::RectangleShape>();
+            shape->setPosition({padding + offset, padding});
+            shape->setSize({2 * padding, size().y - 2 * padding});
+            return shape;
+        };
+
+        m_pauseShapes.push_back(createPauseShape());
+        m_pauseShapes.push_back(createPauseShape(10));
     }
+
+    void draw(sf::RenderTarget &target, sf::RenderStates states) const override
+    {
+        states.transform *= getTransform();
+        if (m_playing) {
+            for (const auto &shape : m_pauseShapes) {
+                target.draw(*shape.get(), states);
+            }
+        } else {
+            target.draw(*m_playShape.get(), states);
+        }
+    }
+
+    void onClicked(sf::Vector2i mousePosition) override
+    {
+        m_playing = !m_playing;
+        m_callback(m_playing);
+    }
+
+private:
+    Callback m_callback;
+    bool m_playing{};
+    std::vector<std::unique_ptr<sf::RectangleShape>> m_pauseShapes;
+    std::unique_ptr<sf::ConvexShape> m_playShape;
 };
 
-class SeekBar : public sf::RectangleShape
+struct ChapterDetails
+{
+    std::string name;
+    std::chrono::milliseconds startTime{};
+    std::chrono::milliseconds endTime{};
+
+    std::chrono::milliseconds duration() { return endTime - startTime; }
+};
+
+struct FilmDetails
+{
+    std::string name;
+    std::chrono::milliseconds duration{};
+    std::vector<ChapterDetails> chapters;
+};
+
+class Chapter : public sf::Transformable, public sf::Drawable
 {
 public:
-    explicit SeekBar(const sf::Vector2f &size = {}) {}
+    explicit Chapter(const ChapterDetails &details)
+        : m_details{details}
+    {
+        m_size = {0, 3};
+        m_backgroundShape.setFillColor(sf::Color{180, 180, 180, 100});
+        m_filledShape.setFillColor(sf::Color::Red);
+    }
+
+    ChapterDetails details() const { return m_details; }
+
+    sf::Vector2f size() const { return m_size; }
+    void setSize(sf::Vector2f size)
+    {
+        m_size = size;
+        m_backgroundShape.setSize(size);
+    }
+
+    void setFilled(float filled) { m_filledShape.setSize({filled * m_size.x, m_size.y}); }
+
+    void draw(sf::RenderTarget &target, sf::RenderStates states) const override
+    {
+        states.transform *= getTransform();
+        target.draw(m_backgroundShape, states);
+        target.draw(m_filledShape, states);
+    }
+
+private:
+    ChapterDetails m_details;
+    sf::Vector2f m_size{};
+    sf::RectangleShape m_backgroundShape;
+    sf::RectangleShape m_filledShape;
+};
+
+class SeekBar : public UiElement
+{
+public:
+    explicit SeekBar()
+    {
+        setSize({0, 16});
+        setFillWidth(true);
+    }
+
+    void setFilmDetails(const FilmDetails &details)
+    {
+        m_filmDetails = details;
+        updateChapters();
+    }
+    FilmDetails filmDetails() const { return m_filmDetails; }
+
+    void setCurrentTime(std::chrono::milliseconds currentTime)
+    {
+        m_currentTime = currentTime;
+        for (const auto &chapter : m_chapters) {
+            chapter->setFilled(std::ranges::clamp(
+                (m_currentTime.count() - chapter->details().startTime.count())
+                    / float(chapter->details().duration().count()),
+                0.0f,
+                1.0f));
+        }
+    }
+
+    void draw(sf::RenderTarget &target, sf::RenderStates states) const override
+    {
+        for (const auto &shape : m_chapters) {
+            target.draw(*shape.get());
+        }
+        UiElement::draw(target, states);
+    }
+
+private:
+    void updateChapters()
+    {
+        const auto newSize = m_filmDetails.chapters.size();
+        const auto oldSize = m_chapters.size();
+        if (newSize > m_filmDetails.chapters.size()) {
+            m_chapters.erase(std::next(std::begin(m_chapters), newSize), std::end(m_chapters));
+        } else if (oldSize < newSize) {
+            for (auto i{oldSize}; i < newSize; ++i) {
+                m_chapters.push_back(std::make_unique<Chapter>(m_filmDetails.chapters.at(i)));
+            }
+        }
+    }
+
+    void updateGeometry() override
+    {
+        const auto availableSize = size().x - (m_chapters.size() - 1) * m_spacing;
+        for (auto x{0.f}; const auto &chapter : m_chapters) {
+            const auto ratio = float(chapter->details().duration().count()) / m_filmDetails.duration.count();
+            chapter->setPosition(getPosition() + sf::Vector2f{x, (size().y - chapter->size().y) / 2});
+            chapter->setSize({ratio * availableSize, chapter->size().y});
+            x += chapter->size().x + m_spacing;
+        }
+    }
+
+    FilmDetails m_filmDetails;
+    std::chrono::milliseconds m_currentTime;
+
+    int m_spacing{2};
+    std::list<std::unique_ptr<Chapter>> m_chapters;
 };
 
 class Layout : public UiElement
@@ -114,35 +277,29 @@ public:
     float padding() const { return m_padding; }
     void setPadding(float padding) { m_padding = padding; }
 
-    void addEntry(std::unique_ptr<UiElement> &&entry)
-    {
-        if (const auto layout = dynamic_cast<Layout *>(entry.get())) {
-            if (layout->orientation() == Orientation::Horizontal) {
-                layout->setSize({size().x - 2 * m_padding, layout->size().y});
-            } else {
-                layout->setSize({layout->size().x, size().y - 2 * m_padding});
-            }
-        }
-        m_entries.push_back(std::move(entry));
-    }
+    void addEntry(std::unique_ptr<UiElement> &&entry) { m_entries.push_back(std::move(entry)); }
 
     void draw(sf::RenderTarget &target, sf::RenderStates states) const override
     {
-        // sf::RectangleShape background{size()};
-        // background.setPosition(getPosition());
-        // background.setFillColor(sf::Color::Red - sf::Color{0, 0, 0, 150});
-        // target.draw(background);
         for (const auto &entry : m_entries) {
             target.draw(*entry);
         }
+        UiElement::draw(target, states);
     }
 
-    void show()
+    void show() override
     {
-        updateMinimumSize();
+        // updateMinimumSize();
         recalculateSizes();
         for (const auto &entry : m_entries) {
             entry->show();
+        }
+    }
+    void onClicked(sf::Vector2i mousePosition) override
+    {
+        mousePosition += sf::Vector2i{getPosition()};
+        for (const auto &entry : m_entries) {
+            entry->onClicked(mousePosition);
         }
     }
 
@@ -173,22 +330,23 @@ private:
                                        })
                                    - (m_entries.size() - 1) * m_spacing;
 
-        auto spacers = m_entries | std::views::filter([this](auto &entry) {
-                           return entry->fillWidth() && m_orientation == Orientation::Horizontal
-                                  || entry->fillHeight() && m_orientation == Orientation::Vertical;
-                       });
-
-        const auto sizePerSpacer = remainingSize / std::ranges::distance(spacers);
-        for (const auto &entry : spacers) {
-            if (m_orientation == Orientation::Horizontal) {
-                entry->setSize(sf::Vector2f{sizePerSpacer, 0});
-            } else {
-                entry->setSize(sf::Vector2f{0, sizePerSpacer});
+        const auto sizePerSpacer = remainingSize / std::ranges::count_if(m_entries, [this](const auto &entry) {
+                                       return entry->fillWidth() && m_orientation == Orientation::Horizontal
+                                              || entry->fillHeight() && m_orientation == Orientation::Vertical;
+                                   });
+        for (const auto &entry : m_entries) {
+            if (entry->fillWidth()) {
+                entry->setSize(
+                    {m_orientation == Orientation::Horizontal ? sizePerSpacer : size().x - 2 * m_padding,
+                     entry->size().y});
+            } else if (entry->fillHeight()) {
+                entry->setSize(
+                    {entry->size().x,
+                     m_orientation == Orientation::Vertical ? sizePerSpacer : size().y - 2 * m_padding});
             }
         }
         auto originPosition = this->getPosition() + sf::Vector2f{m_padding, m_padding};
         for (const auto &entry : m_entries) {
-            std::cout << std::format("{}, {}\n", originPosition.x, originPosition.y);
             entry->setPosition(originPosition);
             const auto newPosition = m_spacing + entry->dimension(m_orientation);
             if (m_orientation == Orientation::Horizontal) {
@@ -196,12 +354,6 @@ private:
             } else {
                 originPosition.y += newPosition;
             };
-        }
-
-        for (auto layout : m_entries | std::views::transform([](auto &entry) {
-                               return dynamic_cast<Layout *>(entry.get());
-                           }) | std::views::filter([](auto layout) { return layout != nullptr; })) {
-            layout->show();
         }
     }
 
@@ -212,36 +364,100 @@ private:
     std::list<std::unique_ptr<UiElement>> m_entries;
 };
 
+class FilmTimer
+{
+public:
+    using Callback = std::function<void(std::chrono::milliseconds)>;
+    static constexpr auto seekInterval = std::chrono::seconds{10};
+
+    std::chrono::milliseconds currentTime() const { return m_currentTime; }
+    bool playing() const { return m_playing; }
+    void play()
+    {
+        m_playing = true;
+        m_clock.restart();
+    }
+    void stop() { m_playing = false; }
+    void jumpBackwards() { jump(-seekInterval); }
+    void jumpForward() { jump(seekInterval); }
+    void update()
+    {
+        if (m_playing) {
+            m_currentTime += std::chrono::milliseconds{m_clock.getElapsedTime().asMilliseconds()};
+            m_clock.restart();
+            m_callback(m_currentTime);
+        }
+    }
+
+    void onCurrnetTimeChanged(Callback &&callback) { m_callback = std::move(callback); }
+
+private:
+    void jump(auto interval)
+    {
+        m_currentTime += interval;
+        m_callback(m_currentTime);
+    }
+
+    Callback m_callback;
+    bool m_playing{};
+    sf::Clock m_clock;
+    std::chrono::milliseconds m_currentTime{};
+};
+
 int main()
 {
-    auto window = sf::RenderWindow({800u, 600u}, "yt seeker");
+    sf::ContextSettings settings;
+    settings.antialiasingLevel = 8.0;
+    auto window = sf::RenderWindow({600, 300}, "yt seeker", sf::Style::Default, settings);
     window.setFramerateLimit(144);
+
+    FilmTimer filmTimer;
 
     Layout layout{Orientation::Vertical};
     layout.setSize(sf::Vector2f{window.getSize()});
     layout.setSpacing(8);
     layout.setPadding(20);
     layout.addEntry(std::make_unique<VSpacer>());
-    layout.addEntry(std::make_unique<PlayButton>());
-
-    auto layout1 = std::make_unique<Layout>(Orientation::Horizontal);
-    layout1->setSpacing(20);
-    layout1->addEntry(std::make_unique<HSpacer>());
-    layout1->addEntry(std::make_unique<PlayButton>());
-    layout1->addEntry(std::make_unique<PlayButton>());
-    layout1->addEntry(std::make_unique<HSpacer>());
-
-    layout.addEntry(std::move(layout1));
-    layout.addEntry(std::make_unique<VSpacer>());
+    auto seekBar = std::make_unique<SeekBar>();
+    seekBar->setFilmDetails(
+        {.name = "test",
+         .duration = std::chrono::seconds{100},
+         .chapters
+         = {{.name = "Chapter 1", .startTime = std::chrono::seconds{0}, .endTime = std::chrono::seconds{20}},
+            {.name = "Chapter 2", .startTime = std::chrono::seconds{20}, .endTime = std::chrono::seconds{80}},
+            {.name = "Chapter 3", .startTime = std::chrono::seconds{80}, .endTime = std::chrono::seconds{100}}}});
+    filmTimer.onCurrnetTimeChanged([seekBar = seekBar.get()](auto time) { seekBar->setCurrentTime(time); });
+    layout.addEntry(std::move(seekBar));
+    layout.addEntry(std::make_unique<PlayButton>([&](auto playing) {
+        if (playing) {
+            filmTimer.play();
+        } else {
+            filmTimer.stop();
+        }
+    }));
     layout.show();
 
+    sf::Clock clock;
     while (window.isOpen()) {
         for (auto event = sf::Event(); window.pollEvent(event);) {
             if (event.type == sf::Event::Closed) {
                 window.close();
             }
+            // if (event.type == sf::Event::MouseMoved) {
+            // std::cout << std::format("({}, {})\n", event.mouseMove.x, event.mouseMove.y);
+            // }
+            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                auto mousePos = sf::Mouse::getPosition(window);
+                layout.onClicked(mousePos);
+            } else if (event.type == sf::Event::KeyPressed) {
+                if (event.key.code == sf::Keyboard::Left) {
+                    filmTimer.jumpBackwards();
+                } else if (event.key.code == sf::Keyboard::Right) {
+                    filmTimer.jumpForward();
+                }
+            }
         }
-
+        filmTimer.update();
         window.clear(sf::Color{37, 38, 40});
         window.draw(layout);
 
