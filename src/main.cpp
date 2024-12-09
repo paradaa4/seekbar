@@ -105,24 +105,47 @@ public:
     }
 
     virtual void show() { updateGeometry(); }
-    virtual void onClicked(sf::Vector2i mousePosition) {}
-    virtual void onMouseMoved(sf::Vector2i mousePosition) {}
+
+    virtual void handleMousePressed(sf::Vector2i mousePosition)
+    {
+        if (containsMouse(mousePosition)) {
+            m_pressed = true;
+            onPressed(mousePosition);
+        }
+    }
+    virtual void handleMouseReleased(sf::Vector2i mousePosition)
+    {
+        if (m_pressed) {
+            m_pressed = false;
+            onReleased();
+        }
+    }
+    virtual void handleMouseMoved(sf::Vector2i mousePosition)
+    {
+        if (const auto hovered = containsMouse(mousePosition); hovered != m_hovered) {
+            m_hovered = hovered;
+            onHoveredChanged();
+        }
+    }
+
+    bool hovered() const { return m_hovered; }
 
 protected:
     sf::Rect<float> rect() const { return {getPosition(), m_size}; }
-    bool containsMouse(sf::Vector2i mousePosition) const
-    {
-        return sf::Rect<float>{getPosition(), m_size}.contains(sf::Vector2f{mousePosition});
-    }
+    bool containsMouse(sf::Vector2i mousePosition) const { return rect().contains(sf::Vector2f{mousePosition}); }
 
 private:
     virtual void updateGeometry(){};
+    virtual void onPressed(sf::Vector2i mousePosition) {}
+    virtual void onReleased() {}
+    virtual void onHoveredChanged() {}
 
     sf::Vector2f m_size{};
     bool m_fillWidth{};
     bool m_fillHeight{};
     std::unique_ptr<sf::Shape> m_shape;
-
+    bool m_pressed{};
+    bool m_hovered{};
     sf::Color m_debugBackgroundColor = []() {
         static std::random_device rd;
         static std::mt19937 mt{rd()};
@@ -180,7 +203,8 @@ public:
         }
     }
 
-    void onClicked(sf::Vector2i mousePosition) override
+private:
+    void onPressed(sf::Vector2i mousePosition) override
     {
         if (containsMouse(mousePosition)) {
             m_playing = !m_playing;
@@ -188,7 +212,6 @@ public:
         m_callback(m_playing);
     }
 
-private:
     Callback m_callback;
     bool m_playing{};
     std::vector<std::unique_ptr<sf::RectangleShape>> m_pauseShapes;
@@ -220,6 +243,15 @@ public:
         setSize({0, fullHeight});
         m_backgroundShape.setFillColor(sf::Color{180, 180, 180, 100});
         m_filledShape.setFillColor(sf::Color::Red);
+        static auto font = [&]() {
+            sf::Font font;
+            font.loadFromFile(fontPath);
+            return font;
+        }();
+        m_text.setFillColor(sf::Color::White);
+        m_text.setFont(font);
+        m_text.setString(m_details.name);
+        m_text.setCharacterSize(16);
     }
 
     ChapterDetails details() const { return m_details; }
@@ -231,43 +263,33 @@ public:
         states.transform *= getTransform();
         target.draw(m_backgroundShape, states);
         target.draw(m_filledShape, states);
-    }
-
-    std::optional<std::chrono::milliseconds> tryJump(sf::Vector2i mousePosition)
-    {
-        if (containsMouse(mousePosition)) {
-            auto progress = (mousePosition.x - getPosition().x) / size().x;
-            return std::chrono::duration_cast<std::chrono::milliseconds>(
-                m_details.startTime + (m_details.endTime - m_details.startTime) * progress);
-        }
-        return {};
-    }
-
-    void onMouseMoved(sf::Vector2i mousePosition) override
-    {
-        const auto hovered = containsMouse(mousePosition);
-        if (hovered != m_hovered) {
-            m_hovered = hovered;
-            updateHeight();
+        if (hovered()) {
+            target.draw(m_text, states);
         }
     }
 
 private:
     static constexpr auto fullHeight = 7;
     static constexpr auto minimizedHeight = 3;
+    static constexpr auto fontPath = "fonts/Arial.ttf";
 
     void updateGeometry() override
     {
         m_backgroundShape.setSize({size().x, getHeight()});
         m_filledShape.setSize({m_filledShape.getSize().x, getHeight()});
+        m_text.setPosition(
+            size().x / 2 - m_text.getGlobalBounds().width / 2,
+            size().y / 2 - m_text.getGlobalBounds().height / 2 - fullHeight * 3);
+
         updateHeight();
     };
-    float getHeight() const { return m_hovered ? fullHeight : minimizedHeight; }
+    void onHoveredChanged() override { updateHeight(); }
+    float getHeight() const { return hovered() ? fullHeight : minimizedHeight; }
     void updateHeight()
     {
         auto updateShape = [&](auto &shape) {
             shape.setSize({shape.getSize().x, getHeight()});
-            shape.setPosition({shape.getPosition().x, m_hovered ? 0.f : (fullHeight - minimizedHeight) / 2.f});
+            shape.setPosition({shape.getPosition().x, hovered() ? 0.f : (fullHeight - minimizedHeight) / 2.f});
         };
         updateShape(m_backgroundShape);
         updateShape(m_filledShape);
@@ -276,7 +298,7 @@ private:
     ChapterDetails m_details;
     sf::RectangleShape m_backgroundShape;
     sf::RectangleShape m_filledShape;
-    bool m_hovered{};
+    sf::Text m_text;
 };
 
 class SeekBar : public UiElement
@@ -289,6 +311,9 @@ public:
 
         setSize({0, 16});
         setFillWidth(true);
+        m_handle.setRadius(6);
+        m_handle.setFillColor(sf::Color::Red);
+        m_handle.setPosition({-m_handle.getRadius(), size().y / 2 - m_handle.getRadius()});
     }
 
     void setFilmDetails(const FilmDetails &details)
@@ -308,31 +333,49 @@ public:
                 0.0f,
                 1.0f));
         }
+        m_handle.setPosition(
+            {size().x * m_timer.currentTime().count() / m_filmDetails.duration.count() - m_handle.getRadius(),
+             size().y / 2 - m_handle.getRadius()});
     }
 
     void draw(sf::RenderTarget &target, sf::RenderStates states) const override
     {
+        states.transform *= getTransform();
         for (const auto &shape : m_chapters) {
-            target.draw(*shape.get());
+            target.draw(*shape.get(), states);
         }
+        if (hovered()) {
+            target.draw(m_handle, states);
+        }
+
         UiElement::draw(target, states);
     }
-    void onClicked(sf::Vector2i mousePosition) override
+    void handleMouseMoved(sf::Vector2i mousePosition) override
     {
+        UiElement::handleMouseMoved(mousePosition);
+        mousePosition -= sf::Vector2i{getPosition()};
         for (const auto &chapter : m_chapters) {
-            if (const auto destination = chapter->tryJump(mousePosition)) {
-                m_timer.jumpTo(destination.value());
-            }
-        }
-    }
-    void onMouseMoved(sf::Vector2i mousePosition) override
-    {
-        for (const auto &chapter : m_chapters) {
-            chapter->onMouseMoved(mousePosition);
+            chapter->handleMouseMoved(mousePosition);
         }
     }
 
 private:
+    void updateGeometry() override
+    {
+        const auto availableSize = size().x - (m_chapters.size() - 1) * m_spacing;
+        for (auto x{0.f}; const auto &chapter : m_chapters) {
+            const auto ratio = float(chapter->details().duration().count()) / m_filmDetails.duration.count();
+            chapter->setPosition(sf::Vector2f{x, (size().y - chapter->size().y) / 2});
+            chapter->setSize({ratio * availableSize, chapter->size().y});
+            x += chapter->size().x + m_spacing;
+        }
+    }
+    void onPressed(sf::Vector2i mousePosition) override
+    {
+        m_timer.jumpTo(std::chrono::duration_cast<std::chrono::milliseconds>(
+            m_filmDetails.duration * (mousePosition.x - getPosition().x) / size().x));
+    }
+
     void updateChapters()
     {
         const auto newSize = m_filmDetails.chapters.size();
@@ -346,22 +389,12 @@ private:
         }
     }
 
-    void updateGeometry() override
-    {
-        const auto availableSize = size().x - (m_chapters.size() - 1) * m_spacing;
-        for (auto x{0.f}; const auto &chapter : m_chapters) {
-            const auto ratio = float(chapter->details().duration().count()) / m_filmDetails.duration.count();
-            chapter->setPosition(getPosition() + sf::Vector2f{x, (size().y - chapter->size().y) / 2});
-            chapter->setSize({ratio * availableSize, chapter->size().y});
-            x += chapter->size().x + m_spacing;
-        }
-    }
-
-    FilmTimer m_timer;
+    FilmTimer &m_timer;
     FilmDetails m_filmDetails;
     std::chrono::milliseconds m_currentTime;
     int m_spacing{2};
     std::list<std::unique_ptr<Chapter>> m_chapters;
+    sf::CircleShape m_handle;
 };
 
 class Layout : public UiElement
@@ -401,16 +434,23 @@ public:
             entry->show();
         }
     }
-    void onClicked(sf::Vector2i mousePosition) override
+    void handleMousePressed(sf::Vector2i mousePosition) override
     {
         for (const auto &entry : m_entries) {
-            entry->onClicked(mousePosition);
+            entry->handleMousePressed(mousePosition);
         }
     }
-    void onMouseMoved(sf::Vector2i mousePosition) override
+    void handleMouseReleased(sf::Vector2i mousePosition) override
     {
         for (const auto &entry : m_entries) {
-            entry->onMouseMoved(mousePosition);
+            entry->handleMouseReleased(mousePosition);
+        }
+    }
+    void handleMouseMoved(sf::Vector2i mousePosition) override
+    {
+        mousePosition -= sf::Vector2i{getPosition()};
+        for (const auto &entry : m_entries) {
+            entry->handleMouseMoved(mousePosition);
         }
     }
 
@@ -486,8 +526,8 @@ int main()
 
     Layout layout{Orientation::Vertical};
     layout.setSize(sf::Vector2f{window.getSize()});
-    layout.setSpacing(8);
-    layout.setPadding(20);
+    layout.setSpacing(4);
+    layout.setPadding(10);
     layout.addEntry(std::make_unique<VSpacer>());
     auto seekBar = std::make_unique<SeekBar>(filmTimer);
     seekBar->setFilmDetails(
@@ -510,14 +550,15 @@ int main()
     sf::Clock clock;
     while (window.isOpen()) {
         for (auto event = sf::Event(); window.pollEvent(event);) {
-            const auto mousePos = sf::Mouse::getPosition(window);
+            const auto mousePosition = sf::Mouse::getPosition(window);
             if (event.type == sf::Event::Closed) {
                 window.close();
-            }
-            if (event.type == sf::Event::MouseMoved) {
-                layout.onMouseMoved(mousePos);
+            } else if (event.type == sf::Event::MouseMoved) {
+                layout.handleMouseMoved(mousePosition);
             } else if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-                layout.onClicked(mousePos);
+                layout.handleMousePressed(mousePosition);
+            } else if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left) {
+                layout.handleMouseReleased(mousePosition);
             } else if (event.type == sf::Event::KeyPressed) {
                 if (event.key.code == sf::Keyboard::Left) {
                     filmTimer.jumpBackwards();
