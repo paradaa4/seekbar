@@ -8,6 +8,8 @@ class Layout : public UiElement
 public:
     explicit Layout(Orientation orientation);
 
+    void addEntry(std::unique_ptr<UiElement> &&entry);
+
     Orientation orientation() const;
     void setOrientation(Orientation orientation);
 
@@ -16,8 +18,6 @@ public:
 
     float padding() const;
     void setPadding(float padding);
-
-    void addEntry(std::unique_ptr<UiElement> &&entry);
 
     void draw(sf::RenderTarget &target, sf::RenderStates states) const override;
     void show() override;

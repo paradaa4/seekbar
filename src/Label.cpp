@@ -21,18 +21,23 @@ Label::Label()
     m_text.setCharacterSize(FontSize);
 }
 
+std::string Label::text() const
+{
+    return m_text.getString();
+}
+
 void Label::setText(const std::string &text)
 {
     m_text.setString(text);
+}
+
+sf::FloatRect Label::getGlobalBounds() const
+{
+    return m_text.getGlobalBounds();
 }
 
 void Label::draw(sf::RenderTarget &target, sf::RenderStates states) const
 {
     states.transform *= getTransform();
     target.draw(m_text, states);
-}
-
-sf::FloatRect Label::getGlobalBounds() const
-{
-    return m_text.getGlobalBounds();
 }

@@ -11,6 +11,7 @@ PlayButton::PlayButton(FilmController &controller)
     : m_controller{controller}
 {
     setSize({DefaultSize, DefaultSize});
+
     m_playShape = [] {
         auto shape = std::make_unique<sf::ConvexShape>();
         shape->setPointCount(3);
@@ -80,9 +81,9 @@ void PlayButton::onPressed(sf::Vector2i mousePosition)
 {
     if (m_controller.playing()) {
         m_controller.pause();
-    } else if (m_controller.paused()) {
-        m_controller.play();
     } else if (m_controller.atEnd()) {
         m_controller.restart();
+    } else if (m_controller.paused()) {
+        m_controller.play();
     }
 }

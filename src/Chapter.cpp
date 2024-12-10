@@ -3,7 +3,7 @@
 constexpr auto FullHeight = 7;
 constexpr auto MinimizedHeight = 3;
 const auto BackgroundColor = sf::Color{180, 180, 180, 100};
-const auto FilledColor = sf::Color{255, 60, 60};
+const auto FilledColor = sf::Color{255, 50, 50};
 
 Chapter::Chapter(const FilmDetails::ChapterDetails &details)
     : m_details{details}
@@ -16,6 +16,11 @@ Chapter::Chapter(const FilmDetails::ChapterDetails &details)
 FilmDetails::ChapterDetails Chapter::details() const
 {
     return m_details;
+}
+
+float Chapter::filled() const
+{
+    return m_filledShape.getSize().x / size().x;
 }
 
 void Chapter::setFilled(float filled)

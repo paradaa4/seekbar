@@ -10,6 +10,7 @@ public:
 
     FilmDetails::ChapterDetails details() const;
 
+    float filled() const;
     void setFilled(float filled);
 
     void draw(sf::RenderTarget &target, sf::RenderStates states) const override;
@@ -17,6 +18,7 @@ public:
 private:
     void updateGeometry() override;
     void onHoveredChanged() override;
+
     float getHeight() const;
     void updateHeight();
 

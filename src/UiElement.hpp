@@ -11,16 +11,17 @@ public:
     sf::Vector2f size() const;
     void setSize(sf::Vector2f size);
 
+    const std::unique_ptr<sf::Shape> &shape() const;
+    void setShape(std::unique_ptr<sf::Shape> &&shape);
+
     float dimension(Orientation orientation) const;
     float secondaryDimension(Orientation orientation) const;
 
-    void setFillWidth(bool fillWidth);
     bool fillWidth() const;
-    void setFillHeight(bool fillHeight);
-    bool fillHeight() const;
+    void setFillWidth(bool fillWidth);
 
-    const std::unique_ptr<sf::Shape> &shape() const;
-    void setShape(std::unique_ptr<sf::Shape> &&shape);
+    bool fillHeight() const;
+    void setFillHeight(bool fillHeight);
 
     void draw(sf::RenderTarget &target, sf::RenderStates states) const override;
 
@@ -48,9 +49,9 @@ private:
     virtual void onDragMove(sf::Vector2i mousePosition) {}
 
     sf::Vector2f m_size{};
+    std::unique_ptr<sf::Shape> m_shape;
     bool m_fillWidth{};
     bool m_fillHeight{};
-    std::unique_ptr<sf::Shape> m_shape;
     bool m_pressed{};
     bool m_hovered{};
     bool m_dragged{};

@@ -11,6 +11,16 @@ void UiElement::setSize(sf::Vector2f size)
     updateGeometry();
 }
 
+const std::unique_ptr<sf::Shape> &UiElement::shape() const
+{
+    return m_shape;
+}
+
+void UiElement::setShape(std::unique_ptr<sf::Shape> &&shape)
+{
+    m_shape = std::move(shape);
+}
+
 float UiElement::dimension(Orientation orientation) const
 {
     return orientation == Orientation::Horizontal ? size().x : size().y;
@@ -21,19 +31,14 @@ float UiElement::secondaryDimension(Orientation orientation) const
     return dimension(orientation == Orientation::Horizontal ? Orientation::Vertical : Orientation::Horizontal);
 }
 
-void UiElement::setFillWidth(bool fillWidth)
-{
-    m_fillWidth = fillWidth;
-}
-
 bool UiElement::fillWidth() const
 {
     return m_fillWidth;
 }
 
-void UiElement::setFillHeight(bool fillHeight)
+void UiElement::setFillWidth(bool fillWidth)
 {
-    m_fillHeight = fillHeight;
+    m_fillWidth = fillWidth;
 }
 
 bool UiElement::fillHeight() const
@@ -41,17 +46,9 @@ bool UiElement::fillHeight() const
     return m_fillHeight;
 }
 
-const std::unique_ptr<sf::Shape> &UiElement::shape() const
+void UiElement::setFillHeight(bool fillHeight)
 {
-    return m_shape;
-}
-
-void UiElement::setShape(std::unique_ptr<sf::Shape> &&shape)
-{
-    m_shape = std::move(shape);
-    if (m_shape) {
-        m_size = m_shape->getGlobalBounds().getSize();
-    }
+    m_fillHeight = fillHeight;
 }
 
 void UiElement::draw(sf::RenderTarget &target, sf::RenderStates states) const

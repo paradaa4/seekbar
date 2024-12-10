@@ -2,19 +2,20 @@
 
 const auto DefaultSize = sf::Vector2f{0, 16};
 constexpr auto HandleRadius = 6.f;
+const auto HandleColor = sf::Color{240, 50, 50};
 
 SeekBar::SeekBar(FilmController &controller)
     : m_controller{controller}
 {
-    m_controller.onCurrentTimeChanged([this] { setCurrentTime(m_controller.currentTime()); });
-
     setSize(DefaultSize);
     setFillWidth(true);
+
     m_handle.setRadius(HandleRadius);
-    m_handle.setFillColor(sf::Color::Red);
+    m_handle.setFillColor(HandleColor);
     m_handle.setPosition({-HandleRadius, size().y / 2 - HandleRadius});
 
     updateChapters();
+    m_controller.onCurrentTimeChanged([this] { setCurrentTime(m_controller.currentTime()); });
 }
 
 void SeekBar::draw(sf::RenderTarget &target, sf::RenderStates states) const
@@ -90,9 +91,9 @@ void SeekBar::updateChapters()
     if (newSize > m_controller.filmDetails().chapters.size()) {
         m_chapters.erase(std::next(std::begin(m_chapters), newSize), std::end(m_chapters));
     } else if (oldSize < newSize) {
-        for (auto i{oldSize}; i < newSize; ++i) {
-            m_chapters.push_back(std::make_unique<Chapter>(m_controller.filmDetails().chapters.at(i)));
-        }
+        std::generate_n(std::back_inserter(m_chapters), newSize - oldSize, [this, i = oldSize] mutable {
+            return std::make_unique<Chapter>(m_controller.filmDetails().chapters.at(i++));
+        });
     }
 }
 

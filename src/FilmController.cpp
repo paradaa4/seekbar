@@ -1,16 +1,16 @@
 #include "FilmController.hpp"
 #include <numeric>
 
-constexpr auto SeekInterval = std::chrono::seconds{10};
-
-void FilmController::setFilmDetails(const FilmDetails &details)
-{
-    m_filmDetails = details;
-}
+constexpr auto JumpInterval = std::chrono::seconds{10};
 
 FilmDetails FilmController::filmDetails() const
 {
     return m_filmDetails;
+}
+
+void FilmController::setFilmDetails(const FilmDetails &details)
+{
+    m_filmDetails = details;
 }
 
 std::chrono::milliseconds FilmController::currentTime() const
@@ -65,12 +65,12 @@ void FilmController::restart()
 
 void FilmController::jumpBackwards()
 {
-    jump(-SeekInterval);
+    jump(-JumpInterval);
 }
 
 void FilmController::jumpForward()
 {
-    jump(SeekInterval);
+    jump(JumpInterval);
 }
 
 void FilmController::jumpTo(std::chrono::milliseconds time)

@@ -9,6 +9,11 @@ Layout::Layout(Orientation orientation)
     setFillWidth(orientation == Orientation::Horizontal);
 }
 
+void Layout::addEntry(std::unique_ptr<UiElement> &&entry)
+{
+    m_entries.push_back(std::move(entry));
+}
+
 Orientation Layout::orientation() const
 {
     return m_orientation;
@@ -38,15 +43,11 @@ void Layout::setPadding(float padding)
     m_padding = padding;
 }
 
-void Layout::addEntry(std::unique_ptr<UiElement> &&entry)
-{
-    m_entries.push_back(std::move(entry));
-}
-
 void Layout::draw(sf::RenderTarget &target, sf::RenderStates states) const
 {
+    states.transform *= getTransform();
     for (const auto &entry : m_entries) {
-        target.draw(*entry);
+        target.draw(*entry, states);
     }
     UiElement::draw(target, states);
 }
@@ -61,6 +62,7 @@ void Layout::show()
 
 void Layout::handleMousePressed(sf::Vector2i mousePosition)
 {
+    mousePosition -= sf::Vector2i{getPosition()};
     for (const auto &entry : m_entries) {
         entry->handleMousePressed(mousePosition);
     }
@@ -68,6 +70,7 @@ void Layout::handleMousePressed(sf::Vector2i mousePosition)
 
 void Layout::handleMouseReleased(sf::Vector2i mousePosition)
 {
+    mousePosition -= sf::Vector2i{getPosition()};
     for (const auto &entry : m_entries) {
         entry->handleMouseReleased(mousePosition);
     }
@@ -104,7 +107,7 @@ void Layout::recalculateSizes()
                 {entry->size().x, m_orientation == Orientation::Vertical ? sizePerSpacer : size().y - 2 * m_padding});
         }
     }
-    auto originPosition = this->getPosition() + sf::Vector2f{m_padding, m_padding};
+    auto originPosition = sf::Vector2f{m_padding, m_padding};
     for (const auto &entry : m_entries) {
         entry->setPosition(originPosition);
         const auto newPosition = m_spacing + entry->dimension(m_orientation);

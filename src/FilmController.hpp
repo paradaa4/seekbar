@@ -13,14 +13,16 @@ public:
 
     enum class State { Playing, Paused, Loading };
 
-    void setFilmDetails(const FilmDetails &details);
     FilmDetails filmDetails() const;
+    void setFilmDetails(const FilmDetails &details);
 
     std::chrono::milliseconds currentTime() const;
+
     bool playing() const;
     bool paused() const;
     bool loading() const;
     bool atEnd() const;
+
     void play();
     void pause();
     void restart();
@@ -37,9 +39,9 @@ private:
     void notify(const std::list<Callback> &callbacks);
 
     FilmDetails m_filmDetails;
+    State m_state{State::Loading};
+    std::chrono::milliseconds m_currentTime{};
     std::list<Callback> m_currentTimeChangedCallbacks;
     std::list<Callback> m_stateChangedCallbacks;
-    State m_state{State::Loading};
     sf::Clock m_clock;
-    std::chrono::milliseconds m_currentTime{};
 };
