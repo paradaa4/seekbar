@@ -11,11 +11,12 @@ class FilmController
 public:
     using Callback = std::function<void()>;
 
+    explicit FilmController(const FilmDetails &details);
+
     enum class State { Playing, Paused, Loading };
 
+    State state() const;
     FilmDetails filmDetails() const;
-    void setFilmDetails(const FilmDetails &details);
-
     std::chrono::milliseconds currentTime() const;
 
     bool playing() const;

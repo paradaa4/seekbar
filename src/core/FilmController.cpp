@@ -3,14 +3,18 @@
 
 constexpr auto JumpInterval = std::chrono::seconds{10};
 
+FilmController::FilmController(const FilmDetails &details)
+    : m_filmDetails{details}
+{}
+
+FilmController::State FilmController::state() const
+{
+    return m_state;
+}
+
 FilmDetails FilmController::filmDetails() const
 {
     return m_filmDetails;
-}
-
-void FilmController::setFilmDetails(const FilmDetails &details)
-{
-    m_filmDetails = details;
 }
 
 std::chrono::milliseconds FilmController::currentTime() const
@@ -107,6 +111,7 @@ void FilmController::jump(std::chrono::milliseconds interval)
         return;
     }
     m_currentTime = std::clamp(m_currentTime + interval, std::chrono::milliseconds{0}, m_filmDetails.duration);
+    update();
     notify(m_currentTimeChangedCallbacks);
 }
 
