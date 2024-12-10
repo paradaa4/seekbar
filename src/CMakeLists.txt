@@ -14,4 +14,4 @@ add_executable(seekbar
     main.cpp
     Application.cpp
     Application.hpp)
-target_link_libraries(seekbar PRIVATE core graphics sfml-graphics)
+target_link_libraries(seekbar PRIVATE graphics)
