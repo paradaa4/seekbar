@@ -27,7 +27,7 @@ public:
     void play();
     void pause();
     void restart();
-    void jumpBackwards();
+    void jumpBackward();
     void jumpForward();
     void jumpTo(std::chrono::milliseconds time);
     void update();

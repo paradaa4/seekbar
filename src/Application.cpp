@@ -4,10 +4,12 @@
 #include "SeekBar.hpp"
 #include "Spacer.hpp"
 
+const auto LoadingStateDuration = sf::seconds(3);
+
 Application::Application(FilmController &controller)
     : m_filmController{controller}
     , m_contextSettings{{}, {}, 8}
-    , m_window{{600, 300}, "yt seeker", sf::Style::Resize | sf::Style::Close, m_contextSettings}
+    , m_window{{600, 300}, "SeekBar", sf::Style::Resize | sf::Style::Close, m_contextSettings}
 {
     m_window.setFramerateLimit(144);
     setupUi();
@@ -46,7 +48,7 @@ void Application::run()
                 m_mainLayout.handleMouseReleased(mousePosition);
             } else if (event.type == sf::Event::KeyPressed) {
                 if (event.key.code == sf::Keyboard::Left) {
-                    m_filmController.jumpBackwards();
+                    m_filmController.jumpBackward();
                 } else if (event.key.code == sf::Keyboard::Right) {
                     m_filmController.jumpForward();
                 } else if (event.key.code == sf::Keyboard::Space && !m_filmController.loading()) {
@@ -58,7 +60,7 @@ void Application::run()
                 }
             }
         }
-        if (loadingClock.getElapsedTime() > sf::seconds(3) && m_filmController.loading()) {
+        if (loadingClock.getElapsedTime() > LoadingStateDuration && m_filmController.loading()) {
             m_filmController.pause();
         }
         m_filmController.update();

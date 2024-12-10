@@ -67,20 +67,20 @@ TEST(FilmController, atEnd)
     ASSERT_TRUE(controller.atEnd());
 }
 
-TEST(FilmController, jumpBackwards)
+TEST(FilmController, jumpBackward)
 {
     auto controller = createController();
     controller.play();
     ASSERT_EQ(controller.currentTime(), std::chrono::seconds{0});
-    controller.jumpBackwards();
+    controller.jumpBackward();
     ASSERT_EQ(controller.currentTime(), std::chrono::seconds{0});
     controller.jumpTo(std::chrono::seconds{30});
     ASSERT_EQ(controller.currentTime(), std::chrono::seconds{30});
-    controller.jumpBackwards();
+    controller.jumpBackward();
     ASSERT_EQ(controller.currentTime(), std::chrono::seconds{20});
-    controller.jumpBackwards();
+    controller.jumpBackward();
     ASSERT_EQ(controller.currentTime(), std::chrono::seconds{10});
-    controller.jumpBackwards();
+    controller.jumpBackward();
     ASSERT_EQ(controller.currentTime(), std::chrono::seconds{0});
 }
 

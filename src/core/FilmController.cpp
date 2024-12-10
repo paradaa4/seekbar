@@ -67,7 +67,7 @@ void FilmController::restart()
     play();
 }
 
-void FilmController::jumpBackwards()
+void FilmController::jumpBackward()
 {
     jump(-JumpInterval);
 }

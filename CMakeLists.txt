@@ -1,16 +1,8 @@
 cmake_minimum_required(VERSION 3.26)
-project(yt_seeker LANGUAGES CXX)
+project(seekbar LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
-
-include(FetchContent)
-FetchContent_Declare(SFML
-    GIT_REPOSITORY https://github.com/SFML/SFML.git
-    GIT_TAG 2.6.x
-    GIT_SHALLOW ON
-    EXCLUDE_FROM_ALL
-    SYSTEM)
-FetchContent_MakeAvailable(SFML)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 add_subdirectory(src)
 
