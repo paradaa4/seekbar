@@ -1,6 +1,9 @@
 # Custom YouTube SeekBar
 
 An implementation of SeekBar mimicing one from YouTube using C++.
+
+![image](https://github.com/user-attachments/assets/c11aa00d-9538-4863-ad33-8edc0bdc3b23)
+
 ## Stack
 
 * C++23
@@ -13,8 +16,10 @@ An implementation of SeekBar mimicing one from YouTube using C++.
 * Play/Pause/Restart button
 * Loading state (for initial 3 seconds)
 * Chapters
-* Drag-andn-Drop to change the current time
-* Left/Right arrow keys to jump forward or backward
+* Showing current time
+* Drag-and-Drop to change the current time
+* Left/Right arrow keys to jump +/- 10s
+* Spacebar key for playing/pausing
 
 ## Tested compilers
 
