@@ -2,6 +2,7 @@
 
 #include "Types.hpp"
 #include <SFML/Graphics.hpp>
+#include <memory>
 
 class UiElement : public sf::Transformable, public sf::Drawable
 {

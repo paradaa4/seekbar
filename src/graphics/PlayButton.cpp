@@ -1,4 +1,5 @@
 #include "PlayButton.hpp"
+#include <cmath>
 #include <numbers>
 #include <ranges>
 
@@ -51,9 +52,8 @@ PlayButton::PlayButton(FilmController &controller)
             - sf::Color{0, 0, 0, sf::Uint8(std::numeric_limits<sf::Uint8>::max() * (i / float(LoadingCirclesCount)))});
         return shape;
     };
-    m_loadingShapes = std::views::iota(0, LoadingCirclesCount)
-                      | std::views::transform([&](auto i) { return createLoadingShape(i); })
-                      | std::ranges::to<std::vector>();
+    for (const auto i : std::views::iota(0, LoadingCirclesCount))
+        m_loadingShapes.push_back(createLoadingShape(i));
 }
 
 void PlayButton::draw(sf::RenderTarget &target, sf::RenderStates states) const
